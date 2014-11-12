@@ -1,17 +1,13 @@
-require 'typhoeus'
-require 'json'
-
-require './utilities.rb'
-require './scorers.rb'
-require './manual.rb'
-
 module LeagueOfLegends
   def spell_efficiency(base_attack_damage, bonus_attack_damage, spell_damage, duel, scorer)
+    scorer_class = nil
+    scorer_class = DamagePerSecondScorer if scorer.match(/damage.?per.?second|dps/i)
+
     ranks = []
+
     data = get('/static-data/na/v1.2/champion', champData: 'spells')['data']
     data.each_value do |champion|
-      spells = champion['spells']
-      spells.each do |spell|
+      champion['spells'].each do |spell|
         vars = spell['vars']
         effect = spell['effect']
         text = spell['sanitizedTooltip']
@@ -176,24 +172,20 @@ module LeagueOfLegends
         components['maxrank'] = spell['maxrank']
 
         score = nil
-
-        if scorer.match(/damage.?per.?second/i)
-          score = DamagePerSecondScorer.score(components, values, duel)
+        unless scorer_class.nil?
+          score = scorer_class.score(components, values, duel)
         end
 
         output = nil
 
         unless score.nil?
-          ranks << { 'score' => score, 'name' => spell['name'], 'image' => spell['image']['full'] }
+          ranks << { 'score' => score, 'name' => spell['name'], 'image' => spell['image']['full'], 'champion' => champion['name'] }
         end
       end
     end
 
-    ranks.sort_by! { |el| el['score'].reduce(:+) / el['score'].length.to_f }.reverse!
-    puts ranks
+    ranks.sort_by! { |el| el['score'].reduce(0.0, :+) / el['score'].length.to_f }.reverse!
+    
+    { 'ranks' => ranks, 'scorer' => scorer_class }
   end
 end
-
-include LeagueOfLegends
-
-spell_efficiency(150, 150, 150, false, 'damage per second')

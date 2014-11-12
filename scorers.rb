@@ -1,5 +1,9 @@
 module LeagueOfLegends
   class DamagePerSecondScorer
+    def self.title
+      'Damage Per Second (DPS)'
+    end
+
     def self.score(components, values, duel)
       scores = components['damage'].map do |damage|
         value = damage['value'].map { |key| values[key] or [0.0] * components['maxrank'] }.reduce([0.0] * components['maxrank'], :element_wise_add)

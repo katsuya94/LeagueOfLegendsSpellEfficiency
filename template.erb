@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>League of Legends | Champion Spell Efficiency</title>
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap.min.css">
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/js/bootstrap.min.js"></script>
+</head>
+<body>
+	<h1><%= data['scorer'].title %><% if duel %> &mdash; Duel<% end %></h1>
+	<h2>Attack Damage: <%= base_attack_damage %> (+<%= bonus_attack_damage %>)</h2>
+	<h2>Ability Power: <%= spell_damage %></h2>
+	<table class="table">
+		<thead>
+			<tr>
+				<th>Icon</th>
+				<th>Name</th>
+				<th>Champion</th>
+				<th>Average</th>
+				<% data['ranks'].map { |spell| spell['score'].length }.max.times do |rank| %>
+				<th>Rank <%= rank + 1 %></th>
+				<% end %>
+			</tr>
+		</thead>
+		<tbody>
+			<% data['ranks'].each do |spell| %>
+			<tr>
+				<td><img src="<%= img_endpoint + '/spell/' + spell['image'] %>" /></td>
+				<td><%= spell['name'] %></td>
+				<td><%= spell['champion'] %></td>
+				<td><%= (spell['score'].reduce(0.0, :+) / spell['score'].length.to_f).round(2) %></td>
+				<% spell['score'].each do |score| %>
+				<td><%= score.round(2) %></td>
+				<% end %>
+			</tr>
+			<% end %>
+		</tbody>
+	</table>
+</body>
+</html>
