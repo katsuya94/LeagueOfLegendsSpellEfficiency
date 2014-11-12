@@ -8,6 +8,8 @@ run.rb provides a script for generating an HTML document ordering the spells by 
 
 Usage: run.rb \[-d\] (--dps|--mana) base_ad bonus_ad ap cdr outfile
 
+The root directory of the repository must contain a file named riot-games-api-key which contains the api key
+
 ## Metrics
 
 ### Damage Per Second

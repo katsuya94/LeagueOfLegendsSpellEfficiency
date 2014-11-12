@@ -35,20 +35,6 @@ module LeagueOfLegends
   end
 end
 
-class Cache
-  def initialize
-    @memory = {}
-  end
-
-  def get(request)
-    @memory[request]
-  end
-
-  def set(request, response)
-    @memory[request] = response
-  end
-end
-
 class Array
   def include_sequence?(*sequence)
     self.each_cons(sequence.length) do |candidate|
