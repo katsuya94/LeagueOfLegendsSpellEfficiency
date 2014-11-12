@@ -2,6 +2,8 @@
 
 Given a champion ability power, base attack damage, bonus attack damage, and cooldown reduction, rank spells based various metrics
 
+In general, these methods attempt to score spells on effectiveness in the absolute most ideal state (hitting the maximum number of targets, hitting with all of the spell, etc.)
+
 ## Metrics
 
 ### Damage Per Second

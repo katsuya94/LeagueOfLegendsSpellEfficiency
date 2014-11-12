@@ -1,0 +1,4 @@
+module LeagueOfLegends
+  MANUAL = {
+  }
+end
