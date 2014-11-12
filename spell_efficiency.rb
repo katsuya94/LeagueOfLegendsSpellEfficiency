@@ -24,7 +24,7 @@ def element_wise_divide(numerators, denominators)
 end
 
 class Array
-  def include_sequence?(sequence)
+  def include_sequence?(*sequence)
     self.each_cons(sequence.length) do |candidate|
       equality = sequence.zip(candidate).map do |pattern, word|
         if pattern.class == Regexp
@@ -91,12 +91,20 @@ realm = get('/static-data/na/v1.2/realm')
 img_endpoint = realm['cdn'] + '/' + realm['v'] + '/img'
 
 before_frequency = Counter.new
-after_frequency = Counter.new
-link_frequency = Counter.new
+after0_frequency = Counter.new
+after1_frequency = Counter.new
+after2_frequency = Counter.new
+before_duration_frequency = Counter.new
+
+duel = false
 
 base_attack_damage = 150
 bonus_attack_damage = 100
 spell_damage = 250
+
+total_effects = 0
+interpreted_effects = 0
+total_multi_target = 0
 
 data = get('/static-data/na/v1.2/champion', champData: 'spells')['data']
 data.each_value do |champion|
@@ -113,129 +121,12 @@ data.each_value do |champion|
     text = spell['sanitizedTooltip']
 
     puts spell['name']
-    puts "cost = #{cost}"
-    puts "costtype = #{costtype}"
-    puts "cooldown = #{cooldown}"
-    puts "vars = #{vars}"
-    puts "effect = #{effect}"
+    puts "cost = #{cost}; costtype = #{costtype}; cooldown = #{cooldown}"
     puts text
 
-    unless vars.nil?
-      vars.each do |var|
-        link_frequency.increment(var['link'])
-      end
-    end
+    values = Hash.new
 
-    values = {}
-    components = Hash.new
-
-    # Attempt to infer what each effect does
-
-    effect.each_index do |ex|
-      unless effect[ex].nil?
-        values["e#{ex.to_s}"] = effect[ex]
-        re = /\{\{ ?e#{ex.to_s} ?\}\}/
-        match = re.match(text)
-        unless match.nil?
-          first, last = match.offset(0)
-
-          percentage = text[last] == '%'
-
-          remaining = text[last..-1]
-          associated_match = []
-
-          while true
-            puts remaining
-            matches = remaining.match(/^(\s*\(?\s*\+?\s*\{\{\s*[a-z0-9]+\s*\}\}\s*\)?)(.*)/)
-            if matches.nil?
-              break
-            end
-
-            clause = matches[1]
-            remaining = matches[2]
-
-            associated_match << clause
-          end
-
-          associated = associated_match.map do |clause|
-            clause[/(?<=\{\{)\s*[a-z0-9]+\s*(?=\}\})/].strip
-          end
-
-          associated << "e#{ex.to_s}"
-
-          before = text[0...first]
-            .downcase
-            .gsub(/(\{\{.+?\}\})|(\(.*?\))/, '')
-            .gsub(/[^\w']/, ' ')
-            .split
-          after = text[last..-1]
-            .downcase
-            .gsub(/(\{\{.+?\}\})|(\(.*?\))/, '')
-            .gsub(/[^\w']/, ' ')
-            .split
-
-          before_frequency.increment(before.last(2).join(' '))
-          after_frequency.increment(after.first(2).join(' '))
-
-          if after.first == 'seconds'
-            components['duration'] = associated
-          else
-            multiplier = 1.0
-            denominator = nil # assume flat (not over time)
-
-            per_index = after.take(3).index('per')
-            second_index = after.take(5).index { |word| word.match(/seconds?/) }
-
-            if !per_index.nil? and !second_index.nil? and second_index > per_index
-              denominator = 1.0
-
-              after[(per_index + 1)...second_index].each do |word|
-                if word.to_i.to_s == word
-                  denominator = word.to_i.to_f
-                end
-              end
-
-              if components['duration'].nil?
-                after.each_index do |pos|
-                  if after[pos] == 'for' and after[pos + 2].match(/seconds?/)
-                    if after[pos + 1].to_f.to_s == after[pos + 1]
-                      components['duration'] = after[pos + 1].to_f
-                    end
-                  end
-                end
-              end
-            end
-
-            if after.take(2).include?('area') or
-               after.include?('champions') or
-               after.include?('enemies') or
-               after.include?('allies') or
-               after.include_sequence?(['for', 'each', /enemy|ally|allied|unit/]) or
-               before.take(2).include?('area') or
-               before.include?('champions') or
-               before.include?('enemies') or
-               before.include?('allies') or
-               before.include_sequence?(['for', 'each', /enemy|ally|allied|unit/])
-              multiplier *= 5
-            end
-
-            if (!before.last.nil? and before.last.match(/deal(s|ing)/)) or
-               (!after.first.nil? and after.first.match(/physical|attack|magic/)) or
-               after.take(3).include?('damage')
-              unless after.take(2).include?('less')
-                if denominator.nil?
-                  components['damage' + ex.to_s] = associated
-                  components['multiplier' + ex.to_s] = multiplier
-                else
-                  components['dot' + ex.to_s] = associated
-                  components['multiplier' + ex.to_s] = multiplier / denominator
-                end
-              end
-            end
-          end
-        end
-      end
-    end
+    # Calculate the values of the various variables
 
     unless vars.nil?
       vars.each do |var|
@@ -253,60 +144,166 @@ data.each_value do |champion|
       end
     end
 
-    puts components
-    puts values
+    effect.each_index do |ex|
+      values["e#{ex.to_s}"] = effect[ex]
+    end
 
-    # damage per second
+    components = Hash.new
 
-    dps = [0.0] * maxrank
+    # Attempt to infer what each effect does
 
-    components.each_key do |component|
-      if component.start_with?('dot')
-        ex = component[-1]
-        dot_dps = components[component]
-          .map { |key| values[key] }
-          .transpose
-          .map { |summands| summands.reduce(:+) }
-          .map { |rank_dps| rank_dps * components['multiplier' + ex] }
+    effect.each_index do |ex|
+      unless effect[ex].nil?
+        re = /\{\{ ?e#{ex.to_s} ?\}\}/
+        match = re.match(text)
+        unless match.nil?
+          # Find the containing sentence
 
-        # TODO
+          period_positions = [-1] + (text.chars.to_a.each_index.select { |index| text[index] == '.' }) + [text.length]
 
-        unless components['duration'].nil?
-          durations = components['duration']
-          durations = durations.each_index { |index| [durations[index], index] }.map do |duration, index|
-            if duration.class == String
-              puts duration, index
-              values[duration][index]
-            else
-              duration
+          first, last = match.offset(0)
+
+          first_index = period_positions.length - 1
+          first_index -= 1 while period_positions[first_index] > first
+
+          last_index = 0
+          last_index += 1 while period_positions[last_index] < last
+
+          sentence = text[(period_positions[first_index] + 1)...period_positions[last_index]]
+          sentence.downcase!
+
+          first -= period_positions[first_index] + 1
+          last -= period_positions[first_index] + 1
+
+          percentage = sentence[last] == '%'
+
+          # Find the associated variables
+
+          remaining = sentence[last..-1]
+          associated = []
+
+          while true
+            matches = remaining.match(/^(\s?\(?\s?\+?\s?\{\{\s?[a-z0-9]+\s?\}\}\s?\)?)(.*)/)
+            if matches.nil?
+              break
+            end
+
+            clause = matches[1]
+            remaining = matches[2]
+
+            associated << clause
+          end
+
+          # Exclude the associated variables from the sentence text
+
+          last += associated.map(&:length).reduce(0, :+)
+
+          # Create a list of the variable names
+
+          associated.map! do |clause|
+            clause[/(?<=\{\{)\s*[a-z0-9]+\s*(?=\}\})/].strip
+          end
+          associated << "e#{ex.to_s}"
+
+          # Divide into words
+
+          before = sentence[0...first].scan(/(?:\w+)|(?:(?:\(\s?\+?\s?)?\{\{\s?[a-z0-9]+\s?\}\}(?:\s?\))?)/)
+          after = sentence[last..-1].scan(/(?:\w+)|(?:(?:\(\s?\+?\s?)?\{\{\s?[a-z0-9]+\s?\}\}(?:\s?\))?)/)
+
+          before_frequency.increment(before.last)
+          after0_frequency.increment(after[0])
+          after1_frequency.increment(after[1])
+          after2_frequency.increment(after[2])
+
+          total_effects += 1
+
+          # "for/over _ second(s)" interpret as a duration
+
+          if !before.last.nil? and before.last.match(/for|over/) and !after.first.nil? and after.first.match(/seconds?/)
+            before.last(4).take(3).each { |word| before_duration_frequency.increment(word) }
+            if before.last(4).take(3).include_sequence?(/damages?/)
+              components['unmapped_durations'] = Array.new if components['unmapped_durations'].nil?
+              components['unmapped_durations'] << associated
+              interpreted_effects += 1
             end
           end
 
-          dot_dps = dot_dps
-            .zip(
-              durations,
-              durations.zip(cooldown).reduce(:+))
-            .map { |rank_dps, rank_duration, rank_cycle|
-              puts rank_dps, rank_duration, rank_cycle;
-              rank_dps * rank_duration / rank_cycle}
-        end
+          duration = []
 
-        dps = dps.zip(dot_dps).map { |summands| summands.reduce(:+) }
+          # "for/over num seconds" interpret as a static duration
+
+          after.each_cons(6) do |pre3, pre2, pre1, prefix, num, suffix|
+            if prefix.match(/for|over/) and num.match(/^[0-9]+\.?[0-9]*$/) and suffix.match(/seconds?/)
+              if [pre3, pre2, pre1].include_sequence?(/damages?/)
+                duration << num.to_f
+                break
+              end
+            end
+          end
+
+          duration = duration.reduce(0, :+) / duration.length.to_f
+
+          per_time = false
+
+          # "_ ... per second" interpret as over time
+
+          if after.take(5).include_sequence?('per', 'second')
+            per_time = true
+          end
+
+          multiplier = 1.0
+
+          damage = false
+
+          # "deals/dealing _" interpret as damage
+
+          if !before.last.nil? and before.last.match(/deal(s|ing)/)
+            damage = true
+          end
+
+          # "_ ... damage" interpret as damage
+
+          if after.take(3).include?('damage')
+            damage = true
+          end
+
+          multi_target = false
+
+          if before.include_sequence?(/champions|units|enemies/) or before.include_sequence?('each', /champion|unit|enemy/) or after.include_sequence?(/champions|units|enemies/) or after.include_sequence?('each', /champion|unit|enemy/)
+            multi_target = true
+            total_multi_target += 1
+          end
+
+          unless duel
+            if multi_target
+              multiplier *= 5.0
+            end
+          end
+
+          if damage
+            components['damage'] = Array.new if components['damage'].nil?
+            components['damage'] << { 'value' => associated, 'duration' => duration, 'per_time' => per_time, 'multiplier' => multiplier }
+            interpreted_effects += 1
+          end
+        end
       end
     end
 
+    puts "components = #{components}"
+    puts "values = #{values}"
+
+    # damage per second
+
+    
+
     # damage per mana
 
-
-    puts components
-    puts values
     puts
   end
 end
 
-puts before_frequency
+puts before_duration_frequency
 puts
-puts after_frequency
-puts
-puts link_frequency
-puts
+
+puts "#{interpreted_effects}/#{total_effects}"
+puts "#{total_multi_target} multi target"
