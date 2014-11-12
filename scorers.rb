@@ -4,7 +4,7 @@ module LeagueOfLegends
       'Damage Per Second (DPS)'
     end
 
-    def self.score(components, values, duel)
+    def self.score(components, values, cdr, duel)
       unmapped_duration = components['unmapped_duration'].map do |duration|
         duration.map{ |key| values[key] or [0.0] * components['maxrank'] }.reduce([0.0] * components['maxrank'], :element_wise_add)
       end.reduce([0.0] * components['maxrank'], :element_wise_add)
@@ -33,7 +33,7 @@ module LeagueOfLegends
 
             duration = duration.element_wise_add(unmapped_duration)
 
-            value.multiply_by_scalar(damage['duration']).element_wise_divide(components['cooldown'].element_wise_add([damage['duration']] * components['maxrank']))
+            value.multiply_by_scalar(damage['duration']).element_wise_divide(components['cooldown'].multiply_by_scalar((100 - cdr) / 100.0).element_wise_add([damage['duration']] * components['maxrank']))
           end
 
         else
@@ -44,7 +44,7 @@ module LeagueOfLegends
 
           duration = duration.element_wise_add(unmapped_duration)
 
-          value.element_wise_divide(components['cooldown'].element_wise_add(duration))
+          value.element_wise_divide(components['cooldown'].multiply_by_scalar((100 - cdr) / 100.0).element_wise_add(duration))
 
         end
 
@@ -67,7 +67,7 @@ module LeagueOfLegends
       'Damage Per Unit Mana'
     end
 
-    def self.score(components, values, duel)
+    def self.score(components, values, cdr, duel)
       unmapped_duration = components['unmapped_duration'].map do |duration|
         duration.map{ |key| values[key] or [0.0] * components['maxrank'] }.reduce([0.0] * components['maxrank'], :element_wise_add)
       end.reduce([0.0] * components['maxrank'], :element_wise_add)

@@ -1,5 +1,5 @@
 module LeagueOfLegends
-  def spell_efficiency(base_attack_damage, bonus_attack_damage, spell_damage, duel, scorer)
+  def spell_efficiency(base_attack_damage, bonus_attack_damage, spell_damage, cdr, duel, scorer)
     # Decide which scorer to use
 
     scorer_class = nil
@@ -200,7 +200,7 @@ module LeagueOfLegends
 
         score = nil
         unless scorer_class.nil?
-          score = scorer_class.score(components, values, duel)
+          score = scorer_class.score(components, values, cdr, duel)
         end
 
         # Gather

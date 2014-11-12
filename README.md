@@ -6,7 +6,7 @@ In general, these methods attempt to score spells on effectiveness in the absolu
 
 run.rb provides a script for generating an HTML document ordering the spells by calculated efficiency
 
-Usage: run.rb \[-d\] (--dps|--mana) base_ad bonus_ad ap
+Usage: run.rb \[-d\] (--dps|--mana) base_ad bonus_ad ap cdr outfile
 
 ## Metrics
 
