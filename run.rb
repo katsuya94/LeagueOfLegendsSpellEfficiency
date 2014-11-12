@@ -23,8 +23,6 @@ OptionParser.new do |opts|
 end.parse!
 
 if scorer.nil? or ARGV.length != 3
-  puts scorer
-  puts ARGV
   puts 'Usage: run.rb [-d] (--dps|--mana) base_ad bonus_ad ap'
   exit
 end

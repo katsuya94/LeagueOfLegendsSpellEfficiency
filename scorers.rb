@@ -30,4 +30,40 @@ module LeagueOfLegends
       scores.reduce([0.0] * components['maxrank'], :element_wise_add)
     end
   end
+
+  class DamagePerManaScorer
+    def self.title
+      'Damage Per Unit Mana'
+    end
+
+    def self.score(components, values, duel)
+      scores = components['damage'].map do |damage|
+
+        value = damage['value'].map { |key| values[key] or [0.0] * components['maxrank'] }.reduce([0.0] * components['maxrank'], :element_wise_add)
+
+        if components['costType'].match(/^mana$/i)
+
+          flat = [0.0] * components['maxrank']
+
+          if damage['per_time'] and !damage['duration'].nan?
+            flat = value.multiply_by_scalar(damage['duration'])
+          elsif !damage['per_time']
+            flat = value
+          end
+
+          flat.element_wise_divide(components['cost'])
+
+        elsif components['costType'].match(/manapersecond/i)
+
+          if damage['per_time']
+            value.element_wise_divide(components['cost'])
+          end
+
+        end
+      end
+
+      scores.reject(&:nil?).reduce([0.0] * components['maxrank'], :element_wise_add)
+
+    end
+  end
 end

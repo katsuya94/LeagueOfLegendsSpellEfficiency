@@ -2,6 +2,7 @@ module LeagueOfLegends
   def spell_efficiency(base_attack_damage, bonus_attack_damage, spell_damage, duel, scorer)
     scorer_class = nil
     scorer_class = DamagePerSecondScorer if scorer.match(/damage.?per.?second|dps/i)
+    scorer_class = DamagePerManaScorer if scorer.match(/damage.?per.?mana|dpm|mana/i)
 
     ranks = []
 
