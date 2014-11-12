@@ -74,6 +74,10 @@ class Array
     self.map { |el| el / scalar }
   end
 
+  def add_scalar(scalar)
+    self.map { |el| el + scalar }
+  end
+
   def element_wise_multiply(*others)
     self.zip(*others).map { |el| el.reduce(:*) }
   end

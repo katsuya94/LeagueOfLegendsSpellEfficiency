@@ -4,6 +4,10 @@ Given a champion ability power, base attack damage, bonus attack damage, and coo
 
 In general, these methods attempt to score spells on effectiveness in the absolute most ideal state (hitting the maximum number of targets, hitting with all of the spell, etc.)
 
+run.rb provides a script for generating an HTML document ordering the spells by calculated efficiency
+
+Usage: run.rb \[-d\] (--dps|--mana) base_ad bonus_ad ap
+
 ## Metrics
 
 ### Damage Per Second

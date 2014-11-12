@@ -1,21 +1,31 @@
 module LeagueOfLegends
   def spell_efficiency(base_attack_damage, bonus_attack_damage, spell_damage, duel, scorer)
+    # Decide which scorer to use
+
     scorer_class = nil
     scorer_class = DamagePerSecondScorer if scorer.match(/damage.?per.?second|dps/i)
     scorer_class = DamagePerManaScorer if scorer.match(/damage.?per.?mana|dpm|mana/i)
 
-    ranks = []
+    # Get data for all spells from API
 
     data = get('/static-data/na/v1.2/champion', champData: 'spells')['data']
+
+    # Gather ranks for each spell
+
+    ranks = []
+
     data.each_value do |champion|
       champion['spells'].each do |spell|
         vars = spell['vars']
         effect = spell['effect']
         text = spell['sanitizedTooltip']
 
+        # Calculate the values of the various variables
+        # Values stores a mapping of keys ('e1', 'a1', etc.) to a list of numerical values for each rank
+
         values = Hash.new
 
-        # Calculate the values of the various variables
+        # Calculate values that can be inferred from AD, Bonus AD, and AP
 
         unless vars.nil?
           vars.each do |var|
@@ -33,12 +43,16 @@ module LeagueOfLegends
           end
         end
 
+        # Add the effect values
+
         effect.each_index do |ex|
           values["e#{ex.to_s}"] = effect[ex]
         end
 
         components = Hash.new
         components['damage'] = Array.new
+        components['unmapped_duration'] = Array.new
+        components['unmapped_percentage'] = Array.new
 
         # Attempt to infer what each effect does
 
@@ -103,12 +117,11 @@ module LeagueOfLegends
                 before = sentence[0...first].scan(/(?:\w+)|(?:(?:\(\s?\+?\s?)?\{\{\s?[a-z0-9]+\s?\}\}(?:\s?\))?)/)
                 after = sentence[last..-1].scan(/(?:\w+)|(?:(?:\(\s?\+?\s?)?\{\{\s?[a-z0-9]+\s?\}\}(?:\s?\))?)/)
 
-                # "for/over _ second(s)" interpret as a duration
+                # "for/over _ second(s)" interpret as an unmapped duration
 
                 if !before.last.nil? and before.last.match(/for|over/) and !after.first.nil? and after.first.match(/seconds?/)
                   if before.last(4).take(3).include_sequence?(/damages?/)
-                    components['unmapped_durations'] = Array.new if components['unmapped_durations'].nil?
-                    components['unmapped_durations'] << associated
+                    components['unmapped_duration'] << associated
                   end
                 end
 
@@ -151,6 +164,8 @@ module LeagueOfLegends
                   damage = true
                 end
 
+                # plurals imply the ability to cast over multiple targets (best case 5)
+
                 targets = 1
 
                 if before.include_sequence?(/champions|units|enemies/) or before.include_sequence?('each', /champion|unit|enemy/) or after.include_sequence?(/champions|units|enemies/) or after.include_sequence?('each', /champion|unit|enemy/)
@@ -158,26 +173,37 @@ module LeagueOfLegends
                 end
 
                 if damage
-                  components['damage'] << { 'value' => associated, 'duration' => duration, 'per_time' => per_time, 'multiplier' => multiplier, 'targets' => targets }
+                  if percentage
+                    # Use damage percenteges to scale later
+                    components['unmapped_percentage'] << associated
+                  else
+                    # Save information about damage
+                    components['damage'] << { 'value' => associated, 'duration' => duration, 'per_time' => per_time, 'multiplier' => multiplier, 'targets' => targets }
+                  end
                 end
               end
             end
           end
         else
+          # Use manual entry instead of inference
           components.merge!(manual)
         end
+
+        # Pass necessary information along to the scorer
 
         components['cost'] = spell['cost']
         components['costType'] = spell['costType']
         components['cooldown'] = spell['cooldown']
         components['maxrank'] = spell['maxrank']
 
+        # Run scorer
+
         score = nil
         unless scorer_class.nil?
           score = scorer_class.score(components, values, duel)
         end
 
-        output = nil
+        # Gather
 
         unless score.nil?
           ranks << { 'score' => score, 'name' => spell['name'], 'image' => spell['image']['full'], 'champion' => champion['name'] }
@@ -185,8 +211,9 @@ module LeagueOfLegends
       end
     end
 
+    # Sort and prepare output
+
     ranks.sort_by! { |el| el['score'].reduce(0.0, :+) / el['score'].length.to_f }.reverse!
-    
     { 'ranks' => ranks, 'scorer' => scorer_class }
   end
 end

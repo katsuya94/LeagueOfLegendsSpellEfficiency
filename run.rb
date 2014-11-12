@@ -5,6 +5,8 @@ require 'erb'
 
 require './league_of_legends.rb'
 
+# Parse input
+
 duel = false
 scorer = nil
 
@@ -22,18 +24,23 @@ OptionParser.new do |opts|
   end
 end.parse!
 
-if scorer.nil? or ARGV.length != 3
-  puts 'Usage: run.rb [-d] (--dps|--mana) base_ad bonus_ad ap'
+if scorer.nil? or ARGV.length != 4
+  puts 'Usage: run.rb [-d] (--dps|--mana) base_ad bonus_ad ap outfile'
   exit
 end
 
 base_attack_damage = ARGV[0].to_i
 bonus_attack_damage = ARGV[1].to_i
 spell_damage = ARGV[2].to_i
+outfile = ARGV[3]
 
 include LeagueOfLegends
 
+# Run calculations
+
 data = spell_efficiency(base_attack_damage, bonus_attack_damage, spell_damage, duel, scorer)
 
+# Output HTML
+
 renderer = ERB.new(File.read('template.erb'))
-File.write('out.html', renderer.result())
+File.write(outfile, renderer.result())
